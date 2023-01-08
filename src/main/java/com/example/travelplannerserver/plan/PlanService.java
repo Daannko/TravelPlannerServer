@@ -16,12 +16,16 @@ public class PlanService {
     public List<Place> getPlanFromGoogleApi(PlacesRequest placesRequest) {
         Map<String,Place> placesList = new TreeMap<>();
         for(String type : placesRequest.getTypes()){
-            placesList.putAll(GoogleService.getPlaces(placesRequest.getLat(), placesRequest.getLng(), type,placesRequest.getPlaceName()));
+            placesList.putAll(GoogleService.getPlaces(placesRequest.getLat(), placesRequest.getLng(), type,placesRequest));
         }
 
         List<Place> sortedList = new ArrayList<>( placesList.values().stream().toList());
         Collections.sort(sortedList);
         return sortedList;
+    }
+
+    public List<Place> getPlacesById(List<String> placesIds){
+        return GoogleService.getPlacesByIds(placesIds);
     }
 
 }
