@@ -10,6 +10,9 @@ import okhttp3.*;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.net.URLConnection;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -19,39 +22,26 @@ import java.util.stream.Collectors;
 
 public class GoogleService {
 
-   /*"https://maps.googleapis.com/maps/api/place/nearbysearch/output?parameters"*/
-   private static final String api = "AIzaSyDl8zk1Jv2eD3-u1RVdutitWTB2JlzrHwU";
-   private final String  baseUrl = "https://maps.googleapis.com/maps/";
+   private static final String apiKey = "AIzaSyDl8zk1Jv2eD3-u1RVdutitWTB2JlzrHwU";
    private  static final int ratingTreshold = 20;
 
-   public static Map<String, Place> getPlaces(double lat, double lng, String type, PlacesRequest placesRequest){
+   public static Map<String, Place> getPlaces(String type, PlacesRequest placesRequest){
 
-      String category = Arrays.stream(type.split("_")).map(e -> e.substring(0,1).toUpperCase() + e.substring(1)).collect(Collectors.joining(" "));
-
+      String category = Arrays.stream(type.split("_"))
+             .map(e -> e.substring(0,1)
+             .toUpperCase() + e.substring(1))
+             .collect(Collectors.joining(" "));
       Gson gson = new Gson();
-      //Using map to prevent duplicates of places
       Map<String,Place> places = new HashMap<>();
-
       OkHttpClient client = new OkHttpClient().newBuilder()
               .build();
 
-
-
-      /*   https://maps.googleapis.com/maps/api/place/textsearch/json?query=tourist%20atraction%20in%20Paris&key=AIzaSyDl8zk1Jv2eD3-u1RVdutitWTB2JlzrHwU*/
-
       String u2 = " https://maps.googleapis.com/maps/api/place/textsearch/json?query="
               + type.replaceAll("_","%20") + "%20"
-//              + "%20near%20"
               + placesRequest.getPlaceLongName().replaceAll(",","").replaceAll(" ", "%20")
-
-//              + placesRequest.getPlaceName()
-//              + "&location=" + placesRequest.getLat() + "%2C" + placesRequest.getLng()
-//              + "&radius=50000"
               + "&language=en"
               + "&key="
-              + api;
-
-      System.out.println(u2);
+              + apiKey;
 
       String u = " https://maps.googleapis.com/maps/api/place/textsearch/json?query="
               + type.replaceAll("_","%20")
@@ -61,12 +51,9 @@ public class GoogleService {
               + "&location=" + placesRequest.getLat() + "%2C" + placesRequest.getLng()
               + "&language=en"
               + "&key="
-              + api;
-
-      System.out.println(u);
+              + apiKey;
 
       ArrayList<String> urls = new ArrayList<>(List.of(u2,u));
-
       try {
 
          for(String url : urls){
@@ -79,24 +66,17 @@ public class GoogleService {
             if(response.body() == null) throw new IOException();
 
             JsonArray results = gson.fromJson( response.body().string(), JsonObject.class).getAsJsonArray("results");
-
-
-
             for(JsonElement place : results) {
 
+               // uniemożliwa dodawanie duplikatów
                if(places.containsKey(place.getAsJsonObject().get("place_id").getAsString())) continue;
+               // pomiń miejsce jeżeli nie spełnia wymagania ilści opini
+               if(place.getAsJsonObject().get("user_ratings_total").getAsInt() < ratingTreshold) continue;
 
-
-               Place toFilter = Place.parsePlace(place,api,category);
-
-               if(toFilter.getTotalRating() > ratingTreshold
-//                     && toFilter.getTypes().contains(type.replaceAll("_" ," "))
-               )
-
-                  places.put(toFilter.getId(),toFilter);
+               Place toFilter = Place.parsePlace(place.getAsJsonObject(),category);
+               places.put(toFilter.getId(),toFilter);
             }
          }
-
       } catch (IOException e) {
          e.printStackTrace();
       }
@@ -104,28 +84,35 @@ public class GoogleService {
    }
 
    public static List<Place> getPlacesByIds(List<String> placesIds){
-
       List<Place> places = new ArrayList<>();
-
       for(String placeId : placesIds){
          places.add(Place.getPlaceFromId(placeId));
       }
-
       return places;
    }
 
-   public static Boolean filterTuritstAtraction(Place place){
-      if(place.getCategory().equals("Tourist Attraction")){
-         if(place.getTypes().contains("church")) return false;
-      }
-      return true;
-   }
+   public static String getPhotoUrlAfterRedirect(String imageReference){
+      String url = "https://maps.googleapis.com/maps/api/place/photo"
+              + "?maxheight=800"
+              + "&maxwidth=800"
+              + "&photo_reference="
+              +  imageReference
+              + "&key="
+              + "AIzaSyDl8zk1Jv2eD3-u1RVdutitWTB2JlzrHwU";
 
-   public static Boolean filterAnimals(Place place){
-      if(place.getCategory().equals("Zoo")){
-         if(place.getTypes().contains("church")) return false;
-      }
-      return true;
-   }
+      URLConnection con;
+      String newurl;
+      try {
 
+         con = new URL( url ).openConnection();
+         con.connect();
+         InputStream is = con.getInputStream();
+         newurl = con.getURL().toString();
+         is.close();
+
+      } catch (IOException e) {
+         throw new RuntimeException(e);
+      }
+      return newurl;
+   }
 }
